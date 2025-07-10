@@ -70,20 +70,16 @@ def create_chart(df, title, ylabel, filename, columns_to_plot):
     plt.close()
     print(f"Saved chart: {filename}")
 
-def create_local_vus_bar_chart(csv_path, title, ylabel, filename):
-    df = pd.read_csv(csv_path)
-    df = df.replace(['NA', ''], np.nan)
-    df['Local Max VUs'] = pd.to_numeric(df['Local Max VUs'], errors='coerce')
-
-    df = df.dropna(subset=['Local Max VUs'])
-    df['Version'] = df['Version'].str.strip()
+def create_bar_chart(df, title, ylabel, filename, x_col, y_col):
+    df = df.dropna(subset=[y_col])
+    df[x_col] = df[x_col].astype(str).str.strip()
 
     plt.figure(figsize=(10, 6))
-    sns.barplot(x='Version', y='Local Max VUs', data=df, palette='husl')
+    sns.barplot(x=x_col, y=y_col, data=df, palette='husl')
 
     plt.title(title, fontsize=14, fontweight='bold')
     plt.ylabel(ylabel, fontsize=12)
-    plt.xlabel('Version', fontsize=12)
+    plt.xlabel(x_col, fontsize=12)
     plt.xticks(rotation=30, ha='right')
     plt.tight_layout()
 
@@ -93,6 +89,8 @@ def create_local_vus_bar_chart(csv_path, title, ylabel, filename):
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved chart: {filename}")
+
+
 
 def main():
     charts = [
@@ -229,6 +227,36 @@ def main():
         },
     ]
 
+    bar_charts = [
+    {
+        'data_file': 'data/max_vus.csv',
+        'title': 'Max Local VUs by Version',
+        'ylabel': 'Max Local VUs',
+        'out_file': 'max_local_vus.png',
+        'x_col': 'Version',
+        'y_col': 'Local Max VUs',
+    },
+    {
+        'data_file': 'data/max_vus.csv',
+        'title': 'Max Local VUs by Rafiki Version',
+        'ylabel': 'Max Local VUs',
+        'out_file': 'max_local_vus_rafiki.png',
+        'x_col': 'Version',
+        'y_col': 'Local Max VUs',
+        'filter_labels': ['2024', '2025']
+    },
+    {
+        'data_file': 'data/max_vus.csv',
+        'title': 'Max Remote VUs by Rafiki Version',
+        'ylabel': 'Max Remote VUs',
+        'out_file': 'max_remote_vus_rafiki.png',
+        'x_col': 'Version',
+        'y_col': 'Remote Max VUs',
+        'filter_labels': ['2024', '2025']
+    },
+]
+
+
     print("Generating performance charts...")
 
     for chart in charts:
@@ -250,13 +278,31 @@ def main():
             print(f"Warning: File not found - {chart['data_file']}")
         except Exception as e:
             print(f"Error generating chart '{chart['out_file']}': {e}")
-    
-    create_local_vus_bar_chart(
-        csv_path='data/max-vus.csv',
-        title='Max Local VUs by Version',
-        ylabel='Max Local VUs',
-        filename='max_local_vus.png'
-    )
+
+    for bar in bar_charts:
+        try:
+            df = load_and_clean_data(bar['data_file'])
+
+            if 'transform' in bar and callable(bar['transform']):
+                df = bar['transform'](df)
+
+            if 'filter_labels' in bar:
+                df = df[df[bar['x_col']].astype(str).str.strip().isin(bar['filter_labels'])]
+
+            print(f"\nProcessing Bar Chart: {bar['title']}")
+            create_bar_chart(
+                df,
+                title=bar['title'],
+                ylabel=bar['ylabel'],
+                filename=bar['out_file'],
+                x_col=bar['x_col'],
+                y_col=bar['y_col']
+            )
+        except FileNotFoundError:
+            print(f"Warning: File not found - {bar['data_file']}")
+        except Exception as e:
+            print(f"Error generating bar chart '{bar['out_file']}': {e}")
+
 
     print("\nChart generation complete! Charts saved in 'charts/'.")
 

@@ -25,7 +25,8 @@ def create_chart(df, title, ylabel, filename, columns_to_plot):
         '2025 Local': {'color': 'blue', 'linestyle': ':', 'marker': 's'},
         '2024 Remote': {'color': 'red', 'linestyle': '-', 'marker': 'o'},
         '2025 Remote': {'color': 'red', 'linestyle': ':', 'marker': 's'},
-        '2025 POC Local': {'color': 'black', 'linestyle': '-', 'marker': '^'}
+        '2025 POC Local': {'color': 'black', 'linestyle': '-', 'marker': '^'},
+        '2025 POC Local 2,4': {'color': 'green', 'linestyle': '-', 'marker': 'd'}
     }
 
     vu_values_with_data = set()
@@ -56,6 +57,7 @@ def create_chart(df, title, ylabel, filename, columns_to_plot):
         min_vu = min(vu_values_sorted)
         max_vu = max(vu_values_sorted)
         plt.xlim(min_vu * 0.8, max_vu * 1.2)
+        # thin labels for readability
         plt.xticks(vu_values_sorted[::2] if len(vu_values_sorted) > 8 else vu_values_sorted,
                    vu_values_sorted[::2] if len(vu_values_sorted) > 8 else vu_values_sorted)
     else:
@@ -65,6 +67,30 @@ def create_chart(df, title, ylabel, filename, columns_to_plot):
     output_dir = Path('charts')
     output_dir.mkdir(exist_ok=True)
     plt.savefig(output_dir / filename, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved chart: {filename}")
+
+def create_local_vus_bar_chart(csv_path, title, ylabel, filename):
+    df = pd.read_csv(csv_path)
+    df = df.replace(['NA', ''], np.nan)
+    df['Local Max VUs'] = pd.to_numeric(df['Local Max VUs'], errors='coerce')
+
+    df = df.dropna(subset=['Local Max VUs'])
+    df['Version'] = df['Version'].str.strip()
+
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x='Version', y='Local Max VUs', data=df, palette='husl')
+
+    plt.title(title, fontsize=14, fontweight='bold')
+    plt.ylabel(ylabel, fontsize=12)
+    plt.xlabel('Version', fontsize=12)
+    plt.xticks(rotation=30, ha='right')
+    plt.tight_layout()
+
+    output_dir = Path('charts')
+    output_dir.mkdir(exist_ok=True)
+    out_path = output_dir / filename
+    plt.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved chart: {filename}")
 
@@ -163,7 +189,44 @@ def main():
             'ylabel': 'Avg Duration (ms)',
             'out_file': 'duration_poc_2025.png',
             'columns': ['2025 POC Local'],
-        }
+        },
+        # Unscaled vs Scaled POC
+        {
+            'data_file': 'data/tps.csv',
+            'title': 'Transactions Per Second (TPS) by Virtual Users - POC vs Scaled POC (2,4)',
+            'ylabel': 'TPS',
+            'out_file': 'tps_poc_vs_poc_scaled_2_4.png',
+            'columns': ['2025 POC Local', '2025 POC Local 2,4'],
+        },
+        {
+            'data_file': 'data/outgoing_created_request_per_second.csv',
+            'title': 'Outgoing Created Requests/Second by Virtual Users - POC vs Scaled POC (2,4)',
+            'ylabel': 'Requests/Second',
+            'out_file': 'outgoing_poc_vs_poc_scaled_2_4.png',
+            'columns': ['2025 POC Local', '2025 POC Local 2,4'],
+        },
+        {
+            'data_file': 'data/http_requests_per_second.csv',
+            'title': 'HTTP Requests/Second by Virtual Users - POC vs Scaled POC (2,4)',
+            'ylabel': 'Requests/Second',
+            'out_file': 'http_requests_poc_vs_poc_scaled_2_4.png',
+            'columns': ['2025 POC Local', '2025 POC Local 2,4'],
+        },
+        {
+            'data_file': 'data/iterations_per_second.csv',
+            'title': 'Iterations/Second by Virtual Users - POC vs Scaled POC (2,4)',
+            'ylabel': 'Iterations/Second',
+            'out_file': 'iterations_poc_vs_poc_scaled_2_4.png',
+            'columns': ['2025 POC Local', '2025 POC Local 2,4'],
+        },
+        {
+            'data_file': 'data/avg_iteration_duration_ms.csv',
+            'title': 'Iteration Duration by Virtual Users - POC vs Scaled POC (2,4)',
+            'ylabel': 'Avg Duration (ms)',
+            'out_file': 'duration_poc_vs_poc_scaled_2_4.png',
+            'columns': ['2025 POC Local', '2025 POC Local 2,4'],
+            'transform': lambda df: df.iloc[:-2] # skip last two rows (2025 POC local doesnt have)
+        },
     ]
 
     print("Generating performance charts...")
@@ -171,6 +234,10 @@ def main():
     for chart in charts:
         try:
             df = load_and_clean_data(chart['data_file'])
+
+            if 'transform' in chart and callable(chart['transform']):
+                df = chart['transform'](df)
+
             print(f"\nProcessing: {chart['title']}")
             create_chart(
                 df,
@@ -183,6 +250,13 @@ def main():
             print(f"Warning: File not found - {chart['data_file']}")
         except Exception as e:
             print(f"Error generating chart '{chart['out_file']}': {e}")
+    
+    create_local_vus_bar_chart(
+        csv_path='data/max-vus.csv',
+        title='Max Local VUs by Version',
+        ylabel='Max Local VUs',
+        filename='max_local_vus.png'
+    )
 
     print("\nChart generation complete! Charts saved in 'charts/'.")
 
